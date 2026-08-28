@@ -1,0 +1,31 @@
+[package]
+name = "paymos-wallet"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Non-custodial, headless SDK to control a wallet vault: balances, fee-transparent quotes, swaps and on-chain withdrawals over a co-signed 2-of-2 vault."
+homepage = "https://wallet.paymos.io"
+license-file = "LICENSE"
+# tests/digest.rs pins the cross-language golden vector, whose payload names a routing layer the
+# product deliberately does not name. The test stays in the private repository and runs in every
+# preflight; it just never ships — same treatment as the Python and TypeScript golden vectors.
+exclude = ["tests/digest.rs"]
+
+# Standalone: this crate is not part of any ancestor Cargo workspace. The empty [workspace]
+# table roots it here so `cargo build` in this dir never gets absorbed into a parent workspace.
+[workspace]
+
+[dependencies]
+# The SAME signing core the Python SDK embeds and the .NET server FFI loads — nobody reimplements
+# FROST. Published to crates.io as `paymos-wallet-core`; the path form is for this monorepo and is
+# rewritten to the plain version dep in the public mirror (scripts/publish-sdk.sh).
+paymos-wallet-core = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+base64 = "0.22"
+hex = "0.4"
+rand = "0.8"
+# Blocking transport on purpose: the SDK is a port of the Python/TypeScript method set, and a
+# blocking client forces no async runtime choice on the integrator.
+ureq = "3"
