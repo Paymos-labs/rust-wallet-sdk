@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/vault/v1/movements/does-not-exist",
+    "body": null
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "movement not found"
+    }
+  }
+}

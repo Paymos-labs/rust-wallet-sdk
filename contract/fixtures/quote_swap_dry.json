@@ -1,0 +1,50 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/vault/v1/quote/swap",
+    "body": {
+      "send": "USDC@base",
+      "receive": "USDT@base",
+      "amount": "5",
+      "mode": "exact_in",
+      "slippage_bps": 50,
+      "dry": true
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "mode": "exact_in",
+      "send": {
+        "amount": "5000000",
+        "asset": "USDC@base"
+      },
+      "debit": {
+        "amount": "5000000",
+        "asset": "USDC@base"
+      },
+      "receive": {
+        "amount": "5000000",
+        "min": "5000000",
+        "asset": "USDT@base"
+      },
+      "fees": {
+        "asset": "USDC@base",
+        "platform": "0",
+        "network": "0",
+        "route": {
+          "amount": "0",
+          "estimate": true
+        },
+        "total": "0",
+        "usd": {
+          "platform": "0",
+          "network": "0",
+          "route": "0",
+          "total": "0"
+        }
+      },
+      "expires_at": "2026-01-01T00:00:00.0000000\u002B00:00"
+    }
+  }
+}

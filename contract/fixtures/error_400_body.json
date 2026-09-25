@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/vault/v1/quote/withdraw",
+    "body": "{not json"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid request \u2014 the body must be JSON matching this endpoint"
+    }
+  }
+}

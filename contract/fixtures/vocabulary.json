@@ -1,0 +1,17 @@
+{
+  "movement_statuses": [
+    "cancelled",
+    "completed",
+    "expired",
+    "failed",
+    "pending",
+    "processing",
+    "refunded"
+  ],
+  "sign_statuses": [
+    "completed",
+    "failed",
+    "pending",
+    "processing"
+  ]
+}

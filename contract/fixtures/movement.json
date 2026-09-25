@@ -1,0 +1,41 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/vault/v1/movements/mv_3",
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "mv_3",
+      "type": "swap",
+      "status": "pending",
+      "send": {
+        "amount": "5000000",
+        "asset": "USDC@base"
+      },
+      "receive": {
+        "amount": "5000000",
+        "min": "5000000",
+        "asset": "USDT@base"
+      },
+      "fees": {
+        "asset": "USDC@base",
+        "platform": "0",
+        "network": "0",
+        "route": {
+          "amount": "0",
+          "estimate": true
+        },
+        "total": "0",
+        "usd": {
+          "platform": "0",
+          "network": "0",
+          "route": "0",
+          "total": "0"
+        }
+      },
+      "created_at": "2026-01-01T00:00:00.0000000\u002B00:00"
+    }
+  }
+}

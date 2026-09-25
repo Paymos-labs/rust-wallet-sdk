@@ -22,6 +22,14 @@ pub struct Asset {
     pub chain: String,
     #[serde(default)]
     pub decimals: u32,
+    /// Lowercase hex SHA-256 of the asset's raw on-chain token id. The co-sign guard binds each
+    /// disclosed transfer's token to this value, which catches a server bug or a compromised
+    /// signing path moving another token. It is published by the same server that builds the
+    /// messages, so it is not a trust anchor against a fully compromised server — pin it out of
+    /// band with [`crate::Wallet::with_pinned_fingerprints`] for that. Optional because older
+    /// servers omit it: reads keep working, but no money call will co-sign without it.
+    #[serde(default)]
+    pub fingerprint: Option<String>,
 }
 
 /// What the vault holds of one asset. `usd` is a display estimate and may be absent.
@@ -75,7 +83,8 @@ pub struct Amount {
     pub asset: String,
 }
 
-/// What arrives. `min` is the floor the operation is allowed to deliver, and it is guaranteed.
+/// What arrives. `min` is the floor the quote states for delivery; the route enforces it, and the
+/// SDK can compare it to a `min_receive` but cannot verify delivery itself.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Receive {
     #[serde(default)]
@@ -95,9 +104,10 @@ pub struct Quote {
     #[serde(default)]
     pub send: Amount,
     /// The MAXIMUM this quote may take from the vault, reserve against slippage included — a
-    /// ceiling, not a prediction. Approve against this and nothing can debit more than you agreed
-    /// to; an exact-output route routinely spends less and returns the difference. Compare the
-    /// finished movement's `send` to see what it actually cost.
+    /// ceiling, not a prediction. The co-sign guard refuses sources that move more than this, but
+    /// the figure itself is the server's: for exact_out, bound it with `max_debit`. An exact-output
+    /// route routinely spends less and returns the difference; compare the finished movement's
+    /// `send` to see what it actually cost.
     #[serde(default)]
     pub debit: Amount,
     #[serde(default)]

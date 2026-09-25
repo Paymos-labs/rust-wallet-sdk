@@ -1,0 +1,23 @@
+{
+  "synthesized": "shape serialized from the server\u0027s DTO; values are placeholders",
+  "request": {
+    "method": "POST",
+    "path": "/vault/v1/movements/mv_3/sign/aggregate",
+    "body": {
+      "token": "sign-session-token",
+      "shares": [
+        {
+          "identifier": "01",
+          "share": "cc"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "status": "processing"
+    }
+  }
+}

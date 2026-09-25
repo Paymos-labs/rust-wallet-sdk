@@ -6,14 +6,18 @@
 //! which is only worth anything if this side refuses to sign things it has not checked, so it
 //! does:
 //!
-//! - **the quote must echo what was approved** — a decimals bug or a lying server changes the
-//!   numbers, and the numbers are compared before a commitment
+//! - **the quote must echo what was approved** — a decimals bug or contract drift changes the
+//!   assets or amounts, and they are compared before a commitment
 //! - **the debit may be capped** — for an exact_out payout the input side is computed by the
-//!   server, so `max_debit` is the caller's ceiling
+//!   server, so `max_debit` is the caller's ceiling; without it, the debit the guard enforces is
+//!   the server's own figure. Set it for unattended payouts
 //! - **never blind-sign** — the server discloses each message, this side recomputes the digest
-//!   and refuses unless the package binds to it
+//!   and refuses unless the package binds to it, signs from this vault, moves the approved asset
+//!   (by the fingerprint the server publishes, or one the caller pinned) and moves no more than
+//!   the approved debit
 //!
-//! Any of those failing returns an error before a single signature share exists.
+//! Any of those failing returns an error before a single signature share exists. Not checked: the
+//! recipient. Each transfer goes to a route deposit address the server chooses.
 
 mod amounts;
 mod digest;
@@ -31,4 +35,4 @@ pub use http::{Http, HttpRequest, HttpResponse, Method, Transport, UreqTransport
 pub use mpc::{commit, sign};
 pub use secret::VaultSecret;
 pub use types::{Amount, Asset, Balance, Fees, Movement, Quote, Receive, RouteFee};
-pub use wallet::{SwapOptions, Wallet, WithdrawOptions};
+pub use wallet::{Fingerprints, SwapOptions, Wallet, WithdrawOptions};

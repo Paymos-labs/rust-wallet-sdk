@@ -1,0 +1,18 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/vault/v1/movements/mv_3/sign/aggregate",
+    "body": {
+      "token": "",
+      "shares": []
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "ok": false,
+      "status": "failed",
+      "error": "token and shares are required"
+    }
+  }
+}

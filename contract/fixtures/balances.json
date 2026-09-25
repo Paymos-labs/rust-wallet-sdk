@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/vault/v1/balances",
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "body": [
+      {
+        "asset": "USDC@base",
+        "symbol": "USDC",
+        "chain": "base",
+        "decimals": 6,
+        "amount_raw": "1000000000",
+        "usd": "1000"
+      }
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/vault/v1/quote/withdraw",
+    "body": {
+      "asset": "USDC@base",
+      "amount": "10",
+      "to": "0xabc0000000000000000000000000000000000000",
+      "mode": "total_in"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "movement_id": "mv_2",
+      "mode": "total_in",
+      "send": {
+        "amount": "9975062",
+        "asset": "USDC@base"
+      },
+      "debit": {
+        "amount": "10000000",
+        "asset": "USDC@base"
+      },
+      "receive": {
+        "amount": "9975062",
+        "min": "9975062",
+        "asset": "USDC@base"
+      },
+      "fees": {
+        "asset": "USDC@base",
+        "platform": "24938",
+        "network": "0",
+        "route": {
+          "amount": "0",
+          "estimate": false
+        },
+        "total": "24938",
+        "usd": {
+          "platform": "0.024938",
+          "network": "0",
+          "route": "0",
+          "total": "0.024938"
+        }
+      },
+      "expires_at": "2026-01-01T00:00:00.0000000\u002B00:00",
+      "sources": 2
+    }
+  }
+}

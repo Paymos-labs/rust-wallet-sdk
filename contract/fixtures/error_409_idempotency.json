@@ -1,0 +1,18 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/vault/v1/quote/withdraw",
+    "body": {
+      "asset": "USDC@base",
+      "amount": "11",
+      "to": "0xabc0000000000000000000000000000000000000",
+      "mode": "exact_out"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "idempotency key reused with a different request"
+    }
+  }
+}

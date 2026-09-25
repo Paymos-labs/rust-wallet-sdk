@@ -1,6 +1,6 @@
 [package]
 name = "paymos-wallet"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 rust-version = "1.75"
 description = "Non-custodial, headless SDK to control a wallet vault: balances, fee-transparent quotes, swaps and on-chain withdrawals over a co-signed 2-of-2 vault."

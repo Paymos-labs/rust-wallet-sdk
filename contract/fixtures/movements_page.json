@@ -1,0 +1,45 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/vault/v1/movements?limit=2",
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "items": [
+        {
+          "id": "mv_3",
+          "type": "swap",
+          "status": "pending",
+          "send": {
+            "amount": "5000000",
+            "asset": "USDC@base"
+          },
+          "receive": {
+            "amount": "5000000",
+            "min": "5000000",
+            "asset": "USDT@base"
+          },
+          "created_at": "2026-01-01T00:00:00.0000000\u002B00:00"
+        },
+        {
+          "id": "mv_2",
+          "type": "withdrawal",
+          "status": "pending",
+          "send": {
+            "amount": "10000000",
+            "asset": "USDC@base"
+          },
+          "receive": {
+            "amount": "9975062",
+            "min": "9975062",
+            "asset": "USDC@base"
+          },
+          "created_at": "2026-01-01T00:00:00.0000000\u002B00:00"
+        }
+      ],
+      "next_cursor": "cursor_1"
+    }
+  }
+}

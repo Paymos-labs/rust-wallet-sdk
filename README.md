@@ -94,14 +94,15 @@ decimals and scales them to raw. Amounts in **responses** come back as raw integ
 
 `quote_swap` / `quote_withdraw` always return a **dry** `Quote` — a pure preview that persists
 nothing and works for read and full keys alike. The headline is `quote.fees`, and
-`quote.receive.min` is the guaranteed floor your slippage tolerance bought.
+`quote.receive.min` is the floor the quote states for your slippage tolerance.
 
 ### Moving money
 
 `swap` and `withdraw` (full key only) create a **real** movement and drive the 2-of-2 co-sign,
 then return a `Movement`. Before any signature the SDK re-checks that the server's quote echoes
-**exactly** the assets and amount you approved — a decimals bug, contract drift, or a lying
-server fails the call and **signs nothing**.
+**exactly** the assets and amount you approved — a decimals bug or contract drift fails the call
+and **signs nothing**. For an `exact_out` withdraw the debit is computed by the server; pass
+`max_debit` to bound it.
 
 ```rust
 let mv = w.swap("USDC@base", "ETH@arb", "100", SwapOptions {
@@ -122,9 +123,9 @@ let mv = w.withdraw("USDC@base", "25", "0xRecipient…", Default::default())?;
 ### Safety caps
 
 - **`slippage_bps`** (swap / quote_swap, default `50` = **0.5%**) — the slippage tolerance sent
-  with the quote; the quote's guaranteed `receive.min` already reflects it.
-- **`min_receive`** (swap) — a human decimal in the receive asset. If the quote's *guaranteed*
-  receive is below it, the call fails with `Error::SlippageExceeded` and signs nothing.
+  with the quote; the quote's `receive.min` already reflects it.
+- **`min_receive`** (swap) — a human decimal in the receive asset. If the quote's stated floor
+  (`receive.min`) is below it, the call fails with `Error::SlippageExceeded` and signs nothing.
 - **`max_debit`** (swap / withdraw) — a human decimal ceiling on the total vault debit. Strongly
   recommended for unattended `exact_out` payouts, whose input side is server-computed.
 
@@ -152,7 +153,7 @@ HTTP `status` when one produced it (`None` for local refusals and transport fail
 | `Forbidden` | `403` — the key is valid but lacks the scope this call needs |
 | `InsufficientFunds` | `400` — the vault balance can't cover the amount (plus fees) |
 | `QuoteExpired` | `400` — the referenced quote expired; fetch a fresh one |
-| `SlippageExceeded` | `400` or local — delivered / guaranteed amount fell below your floor |
+| `SlippageExceeded` | `400` or local — delivered / quoted minimum amount fell below your floor |
 | `CrossAssetWithdrawNotAllowed` | `400` — a withdraw changed the asset (that's a swap) |
 | `RouteUnavailable` | `400` — no route could be quoted right now; retry shortly |
 | `RateLimited` | `429` — carries `retry_after` (seconds, or `None`) |
@@ -167,9 +168,11 @@ read key can never sign.
 - A leaked **API key alone cannot move funds** — no share, no signature (and the key can be
   revoked).
 - A leaked **share alone cannot move funds** — no server co-sign.
-- Both are required, on purpose. The SDK additionally verifies every message it co-signs, and
-  that the server's quote matches exactly what you approved — so a compromised server can't
-  redirect funds or inflate an amount past your caps.
+- Both are required, on purpose. The SDK additionally checks every message it co-signs: it binds
+  to the disclosed text, signs from your vault, moves the approved asset, and moves no more than
+  the approved debit. What it does **not** check is the recipient — each transfer goes to a route
+  deposit address the server chooses. And for `exact_out` the approved debit is itself computed by
+  the server unless you pass `max_debit`, so set `max_debit` for unattended payouts.
 
 Treat a full `vs_live_…` secret like a private key, and back up the share — losing it means
 losing your ability to co-sign.
@@ -207,9 +210,21 @@ your half of the signature exists.
 ### Does it blind-sign whatever the server asks for?
 
 No, and this is the part worth reading twice. The server discloses the exact message it wants
-signed; the SDK recomputes the digest itself and refuses unless that message belongs to your vault,
-moves no more than the debit you approved, and matches the request you made. A server asking for
-anything else gets a refusal, not a signature.
+signed; the SDK recomputes the digest itself and refuses unless that message belongs to your vault
+and moves no more than the debit you approved. Two limits: the recipient is a route deposit address
+the server chooses and is not checked, and for `exact_out` the approved debit is the server's own
+figure unless you pass `max_debit`.
+
+It also checks that every transfer moves the asset you approved, by comparing the token's SHA-256
+with the fingerprint `/assets` publishes for it. That fingerprint comes from the same server that
+builds the messages, so it catches a server bug or a compromised signing path, not a server
+compromised end to end. For an anchor that does not depend on the server, pin the fingerprints
+yourself — for a pinned asset only your values count:
+
+```rust
+let w = Wallet::from_env()?
+    .with_pinned_fingerprints([("USDC@base", "a42c7e46411394e7c7719eef5be19239b2716b91d3a4a843fd3d2c0b6ca16b7c")]);
+```
 
 ### Which networks and assets are supported?
 
@@ -234,7 +249,8 @@ sign — not the funds.
 ### What happens if a transfer is interrupted?
 
 Every money-moving call takes an idempotency key. Repeating a call with the same key returns the
-original operation instead of starting a second one, so a retry after a timeout cannot pay twice.
+original operation instead of starting a second one, so a retry after a timeout with the same key
+replays the first payment rather than making another.
 
 ## The same wallet, in eight languages
 

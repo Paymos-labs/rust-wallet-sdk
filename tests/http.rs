@@ -63,10 +63,10 @@ fn http(stub: impl Transport + 'static) -> Http {
 
 #[test]
 fn returns_parsed_json_on_a_2xx() {
-    let body = http(Stub::json(200, &serde_json::json!({ "assets": [] })))
-        .get("/x", &[])
-        .unwrap();
-    assert_eq!(body, serde_json::json!({ "assets": [] }));
+    // /assets answers a bare array — the object wrapper this test used to mock was never sent.
+    let assets = serde_json::json!([{ "asset": "USDC@base", "symbol": "USDC", "chain": "base", "decimals": 6 }]);
+    let body = http(Stub::json(200, &assets)).get("/x", &[]).unwrap();
+    assert_eq!(body, assets);
 }
 
 #[test]

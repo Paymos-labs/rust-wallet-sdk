@@ -1,0 +1,34 @@
+{
+  "synthesized": "shape serialized from the server\u0027s DTO; values are placeholders",
+  "request": {
+    "method": "POST",
+    "path": "/vault/v1/movements/mv_3/sign/begin",
+    "body": {
+      "commitments": [
+        {
+          "identifier": "01",
+          "hiding": "aa",
+          "binding": "bb"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "token": "sign-session-token",
+      "signing_packages": [
+        {
+          "message": "package"
+        }
+      ],
+      "messages": [
+        {
+          "message": "{\u0022signer_id\u0022:\u0022vault.example\u0022}",
+          "nonce": "00ff",
+          "recipient": "recipient.example"
+        }
+      ]
+    }
+  }
+}

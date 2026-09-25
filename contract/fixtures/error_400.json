@@ -1,0 +1,18 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/vault/v1/quote/withdraw",
+    "body": {
+      "asset": "USDC@base",
+      "amount": "10",
+      "to": "0xabc0000000000000000000000000000000000000",
+      "mode": "exact-out"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid mode"
+    }
+  }
+}

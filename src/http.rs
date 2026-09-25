@@ -111,6 +111,9 @@ pub struct Http {
     transport: Box<dyn Transport>,
 }
 
+/// How much of a body that is not the envelope makes it into a message.
+const SNIPPET_CHARS: usize = 200;
+
 fn message_of(body: &Value, status: u16, text: &str) -> String {
     if let Some(msg) = body
         .get("error")
@@ -122,7 +125,27 @@ fn message_of(body: &Value, status: u16, text: &str) -> String {
         }
     }
     let trimmed = text.trim();
-    if trimmed.is_empty() { format!("request failed with status {status}") } else { trimmed.to_string() }
+    if trimmed.is_empty() {
+        return format!("request failed with status {status}");
+    }
+    // Every non-2xx under /vault/ carries a JSON envelope, so markup means something in front of
+    // the API answered instead — a proxy's or the site's own 404 page. Echoing a whole HTML
+    // document as the message told the caller nothing; naming what happened does.
+    if trimmed.starts_with('<') {
+        return format!(
+            "HTTP {status} with an HTML page instead of the vault API's JSON — check the base URL \
+             (PAYMOS_BASE_URL) and any proxy in front of it: {}",
+            snippet(trimmed)
+        );
+    }
+    snippet(trimmed)
+}
+
+fn snippet(text: &str) -> String {
+    match text.char_indices().nth(SNIPPET_CHARS) {
+        Some((cut, _)) => format!("{}…", &text[..cut]),
+        None => text.to_string(),
+    }
 }
 
 /// Map a 400's message to a type. First match wins, in this exact order.
@@ -210,10 +233,29 @@ impl Http {
             .send(&req)
             .map_err(|e| Error::paymos(format!("transport error: {e}")))?;
 
-        let body: Value = serde_json::from_str(&resp.body).unwrap_or(Value::Null);
+        let parsed = serde_json::from_str::<Value>(&resp.body);
         if (200..300).contains(&resp.status) {
-            return Ok(body);
+            // A 2xx that is not JSON is not the API either — most likely a site or SPA fallback
+            // serving its own page on this path. Mapping it to `null` let every reader downstream
+            // report a shape error (or, before the array fix, an empty list) instead of the cause.
+            return parsed.map_err(|_| {
+                let text = resp.body.trim();
+                let what = if text.is_empty() {
+                    "an empty body".to_string()
+                } else {
+                    format!("a non-JSON body: {}", snippet(text))
+                };
+                Error::Paymos {
+                    message: format!(
+                        "HTTP {} with {what} — expected the vault API's JSON; check the base URL \
+                         (PAYMOS_BASE_URL) and any proxy in front of it",
+                        resp.status
+                    ),
+                    status: Some(resp.status),
+                }
+            });
         }
+        let body = parsed.unwrap_or(Value::Null);
         let retry_after = resp
             .headers
             .iter()

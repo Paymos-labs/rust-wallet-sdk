@@ -1,0 +1,15 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/vault/v1/movements/mv_3/sign/begin",
+    "body": {
+      "commitments": []
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "commitments are required"
+    }
+  }
+}

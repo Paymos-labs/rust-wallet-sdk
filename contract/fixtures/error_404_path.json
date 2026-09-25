@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/vault/v1/no-such-endpoint",
+    "body": null
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not found"
+    }
+  }
+}

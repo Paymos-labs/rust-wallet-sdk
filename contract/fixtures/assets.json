@@ -1,0 +1,26 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/vault/v1/assets",
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "body": [
+      {
+        "asset": "USDC@base",
+        "symbol": "USDC",
+        "chain": "base",
+        "decimals": 6,
+        "fingerprint": "a42c7e46411394e7c7719eef5be19239b2716b91d3a4a843fd3d2c0b6ca16b7c"
+      },
+      {
+        "asset": "USDT@base",
+        "symbol": "USDT",
+        "chain": "base",
+        "decimals": 6,
+        "fingerprint": "4aa51775b928a58a1ff49de71caf2cd78e1bf728d2853d7193d14cf30728f039"
+      }
+    ]
+  }
+}
