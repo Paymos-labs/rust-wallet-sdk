@@ -53,12 +53,29 @@ fn fresh_idempotency_key() -> String {
     hex::encode(bytes)
 }
 
+/// The key a money call is sent under: the caller's, or a fresh one when they passed `None`. An
+/// empty or blank key is refused. It used to go out as an empty header, which the server reads as
+/// no key at all: a retry paid again while the caller believed it was deduplicated.
+fn idempotency_key_of(key: &Option<String>) -> Result<String> {
+    match key {
+        None => Ok(fresh_idempotency_key()),
+        Some(k) if k.trim().is_empty() => Err(Error::paymos(
+            "idempotency_key is empty — pass a durable key (a payout or job id) so a retry replays the same movement, or leave it None for a fresh one per call",
+        )),
+        Some(k) => Ok(k.clone()),
+    }
+}
+
 /// Options for [`Wallet::swap`]. All fields optional; `Default` gives the SDK defaults.
 #[derive(Debug, Default, Clone)]
 pub struct SwapOptions {
     pub slippage_bps: Option<u32>,
+    /// A HUMAN decimal floor on the quote's minimum receive, in the receive asset.
     pub min_receive: Option<String>,
+    /// A HUMAN decimal ceiling on the total vault debit, in the send asset.
     pub max_debit: Option<String>,
+    /// A durable key (a payout or job id): a retry under it replays the same movement. `None` gets
+    /// a fresh key per call, so a retry is a new payment; an empty or blank key is refused.
     pub idempotency_key: Option<String>,
 }
 
@@ -66,7 +83,10 @@ pub struct SwapOptions {
 #[derive(Debug, Default, Clone)]
 pub struct WithdrawOptions {
     pub mode: Option<String>,
+    /// A HUMAN decimal ceiling on the total vault debit.
     pub max_debit: Option<String>,
+    /// A durable key (a payout or job id): a retry under it replays the same movement. `None` gets
+    /// a fresh key per call, so a retry is a new payment; an empty or blank key is refused.
     pub idempotency_key: Option<String>,
 }
 
@@ -239,6 +259,10 @@ impl Wallet {
     // ── quotes ───────────────────────────────────────────────────────────────
 
     /// A dry preview. Nothing is created and nothing is signed.
+    ///
+    /// `amount` is a HUMAN decimal string in the send asset (`"100"`, `"0.5"`); the server scales
+    /// it by the asset's decimals. The quote comes back in raw integer strings. Never pass
+    /// [`crate::parse_units`] output here: `"10000"` is ten thousand of the asset, not 0.01.
     pub fn quote_swap(
         &self,
         send: &str,
@@ -263,6 +287,9 @@ impl Wallet {
     }
 
     /// A dry preview. Nothing is created and nothing is signed.
+    ///
+    /// `amount` is a HUMAN decimal string in `asset` (`"25"`, `"0.01"`); the server scales it. The
+    /// quote comes back in raw integer strings. Never pass [`crate::parse_units`] output here.
     pub fn quote_withdraw(&self, asset: &str, amount: &str, to: &str, mode: &str) -> Result<Quote> {
         self.validate_amount(amount, asset)?;
         self.quote(
@@ -275,8 +302,16 @@ impl Wallet {
 
     // ── money ────────────────────────────────────────────────────────────────
 
+    /// Swaps `amount` of `send` for `receive`, delivered back to this vault: a real movement,
+    /// co-signed. Full-key secrets only.
+    ///
+    /// `amount`, like `min_receive` and `max_debit`, is a HUMAN decimal string (`"100"`, `"0.5"`)
+    /// that the server scales by the asset's decimals — never [`crate::parse_units`] output, which
+    /// would be read as that many whole units: `swap("USDC@base", "USDT@base", "10000", …)` swaps
+    /// ten thousand USDC.
     pub fn swap(&self, send: &str, receive: &str, amount: &str, options: SwapOptions) -> Result<Movement> {
         self.require_share("swap")?;
+        let key = idempotency_key_of(&options.idempotency_key)?;
         let send_dec = self.validate_amount(amount, send)?;
         let recv_dec = self.decimals_of(receive)?;
 
@@ -290,12 +325,7 @@ impl Wallet {
                 "slippage_bps": options.slippage_bps.unwrap_or(50),
             }),
             false,
-            Some(
-                options
-                    .idempotency_key
-                    .clone()
-                    .unwrap_or_else(fresh_idempotency_key),
-            ),
+            Some(key),
         )?;
 
         if let Some(min_receive) = &options.min_receive {
@@ -318,6 +348,13 @@ impl Wallet {
         self.movement(require_movement_id(&q)?)
     }
 
+    /// Pays `amount` of `asset` out to `to`: a real movement, co-signed. Full-key secrets only.
+    ///
+    /// `amount`, like `max_debit`, is a HUMAN decimal string (`"25"`, `"0.01"`) that the server
+    /// scales by the asset's decimals — never [`crate::parse_units`] output.
+    /// `withdraw("USDC@base", "10000", …)`, which is what `parse_units("0.01", 6)` returns, pays out
+    /// ten thousand USDC; the SDK and the server agree on that number, so no check can tell it from
+    /// an intended one.
     pub fn withdraw(
         &self,
         asset: &str,
@@ -326,6 +363,7 @@ impl Wallet {
         options: WithdrawOptions,
     ) -> Result<Movement> {
         self.require_share("withdraw")?;
+        let key = idempotency_key_of(&options.idempotency_key)?;
         let dec = self.validate_amount(amount, asset)?;
         let mode = options.mode.as_deref().unwrap_or("exact_out");
 
@@ -333,12 +371,7 @@ impl Wallet {
             "/vault/v1/quote/withdraw",
             json!({ "asset": asset, "amount": amount, "to": to, "mode": mode }),
             false,
-            Some(
-                options
-                    .idempotency_key
-                    .clone()
-                    .unwrap_or_else(fresh_idempotency_key),
-            ),
+            Some(key),
         )?;
 
         // A withdraw is same-asset. For exact_out the approved amount is the guaranteed OUT; for
@@ -666,8 +699,10 @@ fn verify_signing_disclosure(
             )));
         }
 
-        // (2) structure and own-vault: one transfer, signed from this vault and no other.
-        let parsed: Value = serde_json::from_str(message).map_err(|e| {
+        // (2) structure and own-vault: one transfer, signed from this vault and no other. Parsed
+        // strictly: the verifier on chain re-parses these exact bytes and rejects a repeated key,
+        // where `serde_json::Value` would keep the last one (see `StrictJson`).
+        let parsed = parse_strict(message).map_err(|e| {
             Error::paymos(format!("co-sign refused: unreadable message for source {i}: {e}"))
         })?;
         let list = parsed.get("intents").and_then(|v| v.as_array());
@@ -727,6 +762,88 @@ fn verify_signing_disclosure(
     Ok(())
 }
 
+/// A disclosed message, read the way the on-chain verifier reads it.
+///
+/// `serde_json::Value` keeps the LAST of a repeated object key. The guard approves bytes the
+/// verifier parses again, with a reader that rejects a repeated field — so a message that names one
+/// key twice says two things, and is refused here instead of being read one way. No message the
+/// server builds repeats a key. (Case is not the issue in this language: serde matches keys
+/// exactly, so `"Intents"` next to `"intents"` is another, unread key on both sides.)
+fn parse_strict(text: &str) -> std::result::Result<Value, serde_json::Error> {
+    serde_json::from_str::<StrictJson>(text).map(|s| s.0)
+}
+
+/// A `serde_json::Value` whose objects, at any depth, never repeat a key.
+struct StrictJson(Value);
+
+impl<'de> serde::Deserialize<'de> for StrictJson {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
+        d.deserialize_any(StrictVisitor).map(StrictJson)
+    }
+}
+
+struct StrictVisitor;
+
+impl<'de> serde::de::Visitor<'de> for StrictVisitor {
+    type Value = Value;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("a JSON value whose objects never repeat a key")
+    }
+
+    fn visit_bool<E>(self, v: bool) -> std::result::Result<Value, E> {
+        Ok(Value::Bool(v))
+    }
+
+    fn visit_i64<E>(self, v: i64) -> std::result::Result<Value, E> {
+        Ok(Value::from(v))
+    }
+
+    fn visit_u64<E>(self, v: u64) -> std::result::Result<Value, E> {
+        Ok(Value::from(v))
+    }
+
+    fn visit_f64<E>(self, v: f64) -> std::result::Result<Value, E> {
+        Ok(serde_json::Number::from_f64(v).map_or(Value::Null, Value::Number))
+    }
+
+    fn visit_str<E>(self, v: &str) -> std::result::Result<Value, E> {
+        Ok(Value::String(v.to_owned()))
+    }
+
+    fn visit_string<E>(self, v: String) -> std::result::Result<Value, E> {
+        Ok(Value::String(v))
+    }
+
+    fn visit_unit<E>(self) -> std::result::Result<Value, E> {
+        Ok(Value::Null)
+    }
+
+    fn visit_none<E>(self) -> std::result::Result<Value, E> {
+        Ok(Value::Null)
+    }
+
+    fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> std::result::Result<Value, A::Error> {
+        let mut items = Vec::new();
+        while let Some(StrictJson(item)) = seq.next_element()? {
+            items.push(item);
+        }
+        Ok(Value::Array(items))
+    }
+
+    fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> std::result::Result<Value, A::Error> {
+        let mut object = serde_json::Map::new();
+        while let Some(key) = map.next_key::<String>()? {
+            if object.contains_key(&key) {
+                return Err(serde::de::Error::custom(format!("duplicate key {key:?}")));
+            }
+            let StrictJson(value) = map.next_value()?;
+            object.insert(key, value);
+        }
+        Ok(Value::Object(object))
+    }
+}
+
 /// This vault's group key, which every disclosed `signer_id` must equal. Without it there is
 /// nothing to compare against, and a check with nothing to compare is a skipped check — so its
 /// absence refuses the co-sign before a commitment exists.
@@ -767,5 +884,30 @@ fn from_array<T: serde::de::DeserializeOwned>(body: Value, path: &str) -> Result
 impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self {
         Error::paymos(format!("bad wire JSON: {e}"))
+    }
+}
+
+#[cfg(test)]
+mod strict_json_tests {
+    use super::parse_strict;
+
+    #[test]
+    fn a_repeated_key_is_refused_at_any_depth_and_however_it_is_spelled() {
+        for text in [
+            r#"{"intents":[1],"intents":[2]}"#,
+            r#"{"intents":[1],"intents":[2]}"#,
+            r#"{"a":{"tokens":{"x":"1","x":"2"}}}"#,
+            r#"[{"memo":{"k":1,"k":1}}]"#,
+        ] {
+            assert!(parse_strict(text).is_err(), "{text} must be refused");
+            assert!(serde_json::from_str::<serde_json::Value>(text).is_ok(), "{text} is what Value would accept");
+        }
+    }
+
+    #[test]
+    fn what_a_strict_reader_accepts_parses_to_the_same_value() {
+        let text = r#"{"deadline":"2026-01-01T00:00:00.000Z","intents":[{"intent":"transfer","receiver_id":"a\"b","tokens":{"usdc-base":"100"}}],"signer_id":"ab","Intents":[],"n":[1,-2,3.5,true,null]}"#;
+        assert_eq!(parse_strict(text).unwrap(), serde_json::from_str::<serde_json::Value>(text).unwrap());
+        assert!(parse_strict(r#"{"a":1} {"b":2}"#).is_err(), "one document, nothing after it");
     }
 }

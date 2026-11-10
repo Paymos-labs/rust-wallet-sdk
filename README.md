@@ -86,9 +86,16 @@ fn main() -> paymos_wallet::Result<()> {
 
 ### Amounts: human in, raw out
 
-Amounts you **pass** are human decimal strings (`"100"`, `"0.5"`) — the server owns each asset's
-decimals and scales them to raw. Amounts in **responses** come back as raw integer strings.
-**Never a float**, in either direction. `parse_units` / `format_units` convert between the two.
+Amounts you **pass** — the `amount` of `quote_swap`, `quote_withdraw`, `swap` and `withdraw`, and
+`min_receive` / `max_debit` — are human decimal strings (`"100"`, `"0.5"`): the server owns each
+asset's decimals and scales them to raw. Amounts in **responses** come back as raw integer strings
+(`"10000"` is 0.01 of a 6-decimal USDC). **Never a float**, in either direction.
+
+`format_units` turns a raw response amount into a human one for display; `parse_units` turns a
+human figure into raw units to **compare** with a response amount. It is never for building an
+argument: `wallet.withdraw("USDC@base", &parse_units("0.01", 6)?, to, …)` sends `"10000"` and pays
+out **10 000 USDC** — the SDK and the server agree on that number, so no check can tell it from an
+intended one.
 
 ### Quotes and fees
 
@@ -248,9 +255,12 @@ sign — not the funds.
 
 ### What happens if a transfer is interrupted?
 
-Every money-moving call takes an idempotency key. Repeating a call with the same key returns the
-original operation instead of starting a second one, so a retry after a timeout with the same key
-replays the first payment rather than making another.
+Every money-moving call is sent under an idempotency key, and repeating a call with the **same** key
+returns the original operation instead of starting a second one. That holds only if your retry
+carries the same key: pass your own durable one (`idempotency_key: Some(…)`, e.g. your payout id)
+and retry with it, and a retry after a timeout replays the first payment rather than making another.
+Leave it `None` and the SDK generates a fresh key per call — a retry is then a second payment. An
+empty key is refused rather than sent.
 
 ## The same wallet, in eight languages
 

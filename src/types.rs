@@ -1,9 +1,14 @@
 //! The read model, ported field-for-field from the Python SDK.
 //!
-//! Every amount is a STRING of raw integer units, never a number. A token with 18 decimals runs
-//! past what an IEEE double holds exactly, so a JSON parser that produced numbers here would
-//! round somebody's balance without saying so. Use [`crate::format_units`] to show one and
-//! [`crate::parse_units`] to build one.
+//! Every amount IN THESE RESPONSE TYPES is a STRING of raw integer units, never a number. A token
+//! with 18 decimals runs past what an IEEE double holds exactly, so a JSON parser that produced
+//! numbers here would round somebody's balance without saying so. [`crate::format_units`] shows
+//! one as a human decimal; [`crate::parse_units`] turns a human figure into raw units to COMPARE
+//! with one.
+//!
+//! The amounts you PASS to [`crate::Wallet`] are the other way round: human decimal strings
+//! (`"100"`, `"0.5"`), which the server scales. Never pass the output of `parse_units` there —
+//! `"10000"` meant as 0.01 USDC is read as 10 000 USDC.
 //!
 //! The server speaks snake_case; camelCase aliases are accepted because the TypeScript port
 //! already taught some wire fixtures that spelling. A missing optional becomes `None` — what the

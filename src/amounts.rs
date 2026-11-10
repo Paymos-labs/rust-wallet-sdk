@@ -17,6 +17,11 @@ fn strip_leading_zeros(s: &str) -> &str {
 }
 
 /// `"1.5"`, 6 → `"1500000"`. Rejects anything that is not a non-negative decimal.
+///
+/// For comparing a human figure with a raw amount from a response — never for building the
+/// `amount` of a quote, swap or withdraw, or a `min_receive` / `max_debit`: those take the human
+/// string itself and the server scales it. `withdraw("USDC@base", "10000", …)` — what
+/// `parse_units("0.01", 6)` returns — pays out 10 000 USDC.
 pub fn parse_units(human: &str, decimals: u32) -> Result<String> {
     let s = human.trim();
     let mut parts = s.splitn(3, '.');
@@ -37,7 +42,8 @@ pub fn parse_units(human: &str, decimals: u32) -> Result<String> {
     Ok(strip_leading_zeros(&raw).to_string())
 }
 
-/// `"1500000"`, 6 → `"1.5"`. Trailing zeros in the fraction are dropped.
+/// `"1500000"`, 6 → `"1.5"`: a raw amount from a response, as a human decimal. Trailing zeros in
+/// the fraction are dropped.
 pub fn format_units(raw: &str, decimals: u32) -> Result<String> {
     let (sign, digits) = match raw.strip_prefix('-') {
         Some(rest) => ("-", rest),

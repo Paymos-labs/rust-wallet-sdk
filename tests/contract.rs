@@ -541,6 +541,57 @@ fn the_blind_sign_guard_refuses_every_lie_before_a_share_exists() {
     }
 }
 
+/// The verifier on chain re-parses the signed bytes and rejects a repeated key, where
+/// `serde_json::Value` keeps the last one. A message naming `intents` twice — 5000 USDC to an
+/// attacker first, a decoy within the debit last — read last-wins would pass every check. It is
+/// refused before a share exists, as is one token listed twice.
+#[test]
+fn a_message_that_repeats_a_key_is_refused_before_a_share_exists() {
+    let keys = Keys::new();
+    let vault = keys.vault();
+    let real = r#"{"intent":"transfer","receiver_id":"attacker.example","tokens":{"usdc-base":"5000000000"}}"#;
+    let decoy = r#"{"intent":"transfer","receiver_id":"recipient.example","tokens":{"usdc-base":"5000000"}}"#;
+    for message in [
+        format!(r#"{{"signer_id":"{vault}","intents":[{real}],"intents":[{decoy}]}}"#),
+        format!(r#"{{"signer_id":"{vault}","intents":[{real}],"intents":[{decoy}]}}"#),
+        format!(r#"{{"signer_id":"{vault}","intents":[{{"intent":"transfer","tokens":{{"usdc-base":"5000000000","usdc-base":"5000000"}}}}]}}"#),
+    ] {
+        let read_last_wins: Value = serde_json::from_str(&message).unwrap();
+        assert_eq!(read_last_wins["intents"].as_array().unwrap().len(), 1, "a last-wins reader sees one intent: {message}");
+
+        let d = json!({ "message": message, "nonce": "11".repeat(32), "recipient": "recipient.example" });
+        let server = swap_server()
+            .route(Method::Post, "/vault/v1/movements/mv_3/sign/begin", honest_begin(keys.server.clone(), vec![d]))
+            .fixture("sign_aggregate");
+        let seen = server.requests();
+        let wallet = Wallet::with_transport(&keys.secret(), BASE, Box::new(server)).unwrap();
+        let err = wallet.swap("USDC@base", "USDT@base", "5", SwapOptions::default()).unwrap_err();
+        assert!(err.message().contains("unreadable message"), "{}", err.message());
+        assert!(!seen.lock().unwrap().iter().any(|r| r.url.ends_with("/sign/aggregate")), "{message}");
+    }
+}
+
+/// An empty idempotency key went out as an empty header, which the server reads as no key at all.
+/// It is refused now, before a single request; `None` still gets a fresh key per call.
+#[test]
+fn an_empty_idempotency_key_is_refused_before_any_request() {
+    let keys = Keys::new();
+    for key in ["", " ", "\t"] {
+        let server = Server::new();
+        let seen = server.requests();
+        let wallet = Wallet::with_transport(&keys.secret(), BASE, Box::new(server)).unwrap();
+        let err = wallet
+            .withdraw("USDC@base", "10", TO, WithdrawOptions { idempotency_key: Some(key.to_string()), ..Default::default() })
+            .unwrap_err();
+        assert!(err.message().contains("idempotency_key is empty"), "{}", err.message());
+        let err = wallet
+            .swap("USDC@base", "USDT@base", "5", SwapOptions { idempotency_key: Some(key.to_string()), ..Default::default() })
+            .unwrap_err();
+        assert!(err.message().contains("idempotency_key is empty"), "{}", err.message());
+        assert!(seen.lock().unwrap().is_empty(), "nothing may reach the server for {key:?}");
+    }
+}
+
 /// withdraw drives the recorded money quote; sign/begin answers sign_begin_error.json and the
 /// movement is still pending, so the 400 surfaces — after the request shape has been checked.
 fn withdraw_until_begin(name: &str, mode: &str, movement_id: &str) -> (Error, Vec<HttpRequest>) {
